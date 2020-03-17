@@ -181,4 +181,4 @@ class TimeoutFinder():
 
 if __name__ == "__main__":
     # Get log dir as param
-    TimeoutFinder("/home/steam/Code/servers/garrysmod/log/console").chunks_by_day()
+    TimeoutFinder("/home/steam/Code/servers/garrysmod/log/console").chunk_by_day()
