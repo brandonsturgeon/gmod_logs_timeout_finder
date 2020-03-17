@@ -100,15 +100,15 @@ class TimeoutFinder():
 
                             # Always break after the first one found because we only want the most recent join
                             break
-        
-        def get_timeouts_for_file(self):
-            glob_pattern = "{}/*.log".format(self.logs_dir)
 
-            filenames = glob.glob(glob_pattern)
+    def find_timeouts_for_files(self):
+        glob_pattern = "{}/*.log".format(self.logs_dir)
 
-            for filename in filenames:
-                print(filename)
+        filenames = glob.glob(glob_pattern)
+
+        for filename in filenames:
+            print(filename)
 
 if __name__ == "__main__":
     # Get log dir as param
-    TimeoutFinder("/home/steam/Code/servers/garrysmod/log/console").get_timeouts_for_file()
+    TimeoutFinder("/home/steam/Code/servers/garrysmod/log/console").find_timeouts_for_files()
