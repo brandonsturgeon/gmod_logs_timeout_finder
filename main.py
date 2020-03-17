@@ -133,6 +133,30 @@ class TimeoutFinder():
         for filename in chunk:
             self.find_timeouts_for_file(filename)
 
+    def chunk_by_day(self, filepaths=None):
+        chunks_by_day = {}
+
+        glob_pattern = "{}/*.log".format(self.logs_dir)
+
+        filepaths = glob.glob(glob_pattern)
+
+        for filepath in filepaths:
+            # 'gmodserver-console-2019-10-23-17:20:20.log'
+            filename = filepath.split("/")[0]
+
+            # ['gmodserver', 'console', '2019', '10', '23', '17:20:20.log']
+            day_key = filename.split("-")
+
+            # ['2019', '10', '23']
+            day_key = day_key[2:5]
+
+            # '2019-10-23'
+            day_key = "-".join(day_key)
+
+            chunks_by_day[day_key] = chunks_by_day.get(day_key, []).append(filepath)
+
+        print(json.dumps(chunks_by_day))
+
     def find_timeouts(self):
         glob_pattern = "{}/*.log".format(self.logs_dir)
 
@@ -157,4 +181,4 @@ class TimeoutFinder():
 
 if __name__ == "__main__":
     # Get log dir as param
-    TimeoutFinder("/home/steam/Code/servers/garrysmod/log/console").find_timeouts()
+    TimeoutFinder("/home/steam/Code/servers/garrysmod/log/console").chunks_by_day()
