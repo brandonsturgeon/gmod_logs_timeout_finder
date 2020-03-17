@@ -116,7 +116,7 @@ class TimeoutFinder():
                 timeout_timestamp = self.get_timestamp_from_line(line)
 
                 # Only search through logs up to this point in the file
-                enter_line = self.get_enter_for_timeout(player_name, loglines[:i])
+                enter_line = self.find_enter_for_timeout(player_name, loglines[:i])
 
                 if not enter_line:
                     logger.warning("Couldn't find an associated connection for timeout: '{}'".format(line))
