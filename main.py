@@ -4,6 +4,7 @@ from loguru import logger
 import dateparser
 import glob
 import io
+import threading
 
 class TimeoutFinder():
     def __init__(self, logs_dir):
@@ -152,4 +153,4 @@ class TimeoutFinder():
 
 if __name__ == "__main__":
     # Get log dir as param
-    TimeoutFinder("/home/steam/Code/servers/garrysmod/log/console").find_timeouts_for_files()
+    TimeoutFinder("/home/steam/Code/servers/garrysmod/log/console").find_timeouts()
