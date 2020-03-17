@@ -1,7 +1,8 @@
-import glob
-import dateparser
 from datetime import datetime
 from loguru import logger
+
+import glob
+import dateparser
 
 class TimeoutFinder():
     def __init__(self, logs_dir):
@@ -110,4 +111,4 @@ class TimeoutFinder():
 
 if __name__ == "__main__":
     # Get log dir as param
-    TimeoutFinder("/home/steam/Code/servers/garrysmod/log/console").find_timeouts()
+    TimeoutFinder("/home/steam/Code/servers/garrysmod/log/console").get_timeouts_for_file()
