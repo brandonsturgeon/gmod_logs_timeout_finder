@@ -4,6 +4,7 @@ from loguru import logger
 import dateparser
 import glob
 import io
+import re
 import threading
 
 class TimeoutFinder():
