@@ -151,7 +151,9 @@ class TimeoutFinder():
         for string in strings:
             string.join()
 
-        for filename, data in self.timeouts.iteritems():
+        sorted_filenames = sorted(self.timeouts.keys())
+        for filename in sorted_filenames:
+            data = self.timeouts[filename]
             logger.info("{}: {}".format(filename, len(data)))
 
 if __name__ == "__main__":
