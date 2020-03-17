@@ -17,18 +17,12 @@ class TimeoutFinder():
 
     @staticmethod
     def get_player_name_from_line(line):
-        #'L 03/16/2020 - 17:16:16: "beamerboy1221<180><STEAM_0:0:181817410><>" disconnected (reason "beamerboy1221 timed out")\r\n'
+        """
+        Using regular expressions, returns player name from line
+        """
+        pattern = r': \\"(.*)<\\d+><STEAM_\\d:\\d:\\d+><>\\".*$'
 
-        # ['L 03/16/2020 - 17:16:16: ', 'beamerboy1221<180><STEAM_0:0:181817410><>', ' disconnected (reason ', 'beamerboy1221 timed out', ')\r\n']
-        player_name = line.split('"')
-
-        # 'beamerboy1221<180><STEAM_0:0:181817410><>'
-        player_name = player_name[1]
-
-        # 'beamerboy1221'
-        player_name = player_name.split("<")[0]
-
-        return player_name
+        return re.findall(pattern, line)[0]
 
     @staticmethod
     def get_datetime_for_timestamp(timestamp):
@@ -105,7 +99,7 @@ class TimeoutFinder():
 
         loglines = []
 
-        with io.open(filename, "r", encoding="utf-8") as log:
+        with io.open(filename, "r", encoding="ISO-8859-1") as log:
             loglines = log.readlines()
 
         for i, line in enumerate(loglines):
