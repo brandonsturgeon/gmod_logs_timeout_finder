@@ -151,6 +151,9 @@ class TimeoutFinder():
         for string in strings:
             string.join()
 
+        for filename, data in self.timeouts.iteritems():
+            logger.info("{}: {}".format(filename, len(data)))
+
 if __name__ == "__main__":
     # Get log dir as param
     TimeoutFinder("/home/steam/Code/servers/garrysmod/log/console").find_timeouts()
