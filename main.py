@@ -21,9 +21,13 @@ class TimeoutFinder():
         """
         Using regular expressions, returns player name from line
         """
-        pattern = r': \\"(.*)<\\d+><STEAM_\\d:\\d:\\d+><>\\".*$'
+        pattern = r': \"(.*)<\d+><STEAM_\d:\d:\d+><>\".*$'
 
-        return re.findall(pattern, line)[0]
+        matches = re.findall(pattern, line)
+
+        logger.debug(matches)
+
+        return matches[0]
 
     @staticmethod
     def get_datetime_for_timestamp(timestamp):
