@@ -4,12 +4,15 @@ from loguru import logger
 import dateparser
 import glob
 import io
+import json
 import re
+import subprocess
 import threading
 
 class TimeoutFinder():
-    def __init__(self, logs_dir):
+    def __init__(self, logs_dir, tmp_dir):
         self.logs_dir = logs_dir
+        self.tmp_dir = tmp_dir
 
         # In minutes to consider a timeout with short playtime
         self.timeout_threshold = 7
@@ -133,16 +136,12 @@ class TimeoutFinder():
         for filename in chunk:
             self.find_timeouts_for_file(filename)
 
-    def chunk_by_day(self, filepaths=None):
+    def chunk_by_day(self, filepaths):
         chunks_by_day = {}
-
-        glob_pattern = "{}/*.log".format(self.logs_dir)
-
-        filepaths = glob.glob(glob_pattern)
 
         for filepath in filepaths:
             # 'gmodserver-console-2019-10-23-17:20:20.log'
-            filename = filepath.split("/")[0]
+            filename = filepath.split("/")[-1]
 
             # ['gmodserver', 'console', '2019', '10', '23', '17:20:20.log']
             day_key = filename.split("-")
@@ -153,16 +152,48 @@ class TimeoutFinder():
             # '2019-10-23'
             day_key = "-".join(day_key)
 
-            chunks_by_day[day_key] = chunks_by_day.get(day_key, []).append(filepath)
+            chunks_by_day[day_key] = chunks_by_day.get(day_key, []) + [filepath]
 
-        print(json.dumps(chunks_by_day))
+        return chunks_by_day
 
-    def find_timeouts(self):
+    def combine_day_chunks(self, day_chunks):
+        for day, files in day_chunks.iteritems():
+            sorted_files = sorted(files)
+            sorted_files = " ".join(sorted_files)
+
+            output_file = f"{self.tmp_dir}/{day}.log"
+
+            command = "cat {} >> {}".format(sorted_files, output_file)
+
+            # We have to do shell here because there's no way to redirect output with subprocess normally
+            logger.info("Running '{}'".format(command))
+            subprocess.check_output(command, shell=True)
+
+    def get_existing_logs(self):
         glob_pattern = "{}/*.log".format(self.logs_dir)
-
         filenames = glob.glob(glob_pattern)
 
+        return filenames
+
+    def create_combined_logs(self):
+        existing_logs = self.get_existing_logs()
+        existing_log_chunks = self.chunk_by_day(existing_logs)
+        self.combine_day_chunks(existing_log_chunks)
+
+    def get_combined_logs(self):
+        self.create_combined_logs()
+
+        glob_pattern = "{}/*.log".format(self.tmp_dir)
+        filenames = glob.glob(glob_pattern)
+
+        return filenames
+
+    def find_timeouts(self):
         strings = []
+
+        filenames = self.get_combined_logs()
+        logger.info(filenames)
+        return
 
         for chunk_number, chunk in enumerate(self.split_work_into_chunks(filenames, 15)):
             string = threading.Thread(target=self.find_timeouts_for_chunk, args=(chunk,chunk_number,))
@@ -178,6 +209,10 @@ class TimeoutFinder():
         for filename in sorted_filenames:
             data = self.timeouts[filename]
             logger.info("{}: {}".format(filename, len(data)))
+
+        for filename in filenames:
+            logger.debug("Removing {}".format(filename))
+            os.remove(filename)
 
 if __name__ == "__main__":
     # Get log dir as param
