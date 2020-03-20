@@ -8,6 +8,7 @@ import json
 import re
 import subprocess
 import threading
+import time
 
 class TimeoutFinder():
     def __init__(self, logs_dir, tmp_dir):
@@ -28,8 +29,6 @@ class TimeoutFinder():
 
         matches = re.findall(pattern, line)
 
-        logger.debug(matches)
-
         return matches[0]
 
     @staticmethod
@@ -41,7 +40,7 @@ class TimeoutFinder():
         return dateparser.parse(timestamp)
 
     @staticmethod
-    def split_work_into_chunks(work, chunks=10):
+    def split_work_into_chunks_of_size(work, chunks):
         for i in range(0, len(work), chunks):
             yield work[i:i + chunks]
 
@@ -51,16 +50,12 @@ class TimeoutFinder():
         Given a line of expected format, return the date time
         """
 
-        # 'L 03/16/2020 - 17:16:16: "beamerboy1221<180><STEAM_0:0:181817410><>" disconnected (reason "beamerboy1221 timed out")\r\n'
+        pattern = r'(\d\d\/\d\d\/\d\d\d\d - \d\d:\d\d:\d\d):'
 
-        # ['L 03/16/2020 - 17:16:16: ', 'beamerboy1221<180><STEAM_0:0:181817410><>', ' disconnected (reason ', 'beamerboy1221 timed out', ')\r\n']
-        timestamp = line.split('"')
+        matches = re.findall(pattern, line)
 
-        # 'L 03/16/2020 - 17:16:16: '
-        timestamp = timestamp[0]
-
-        # '03/16/2020 - 17:16:16'
-        timestamp = timestamp[2:-2]
+        timestamp = matches[0]
+        logger.debug("Found '{}' from '{}'".format(timestamp, line))
 
         return timestamp
 
@@ -72,19 +67,23 @@ class TimeoutFinder():
 
         # We reverse it so we can get the most recent entered event from the timeout
         for lookback_line in reversed(lines):
-            if ' entered the game\r\n' in lookback_line:
-                if player_name in lookback_line:
+            pattern = r': \"(.*)<\d+><STEAM_\d:\d:\d+><>\" entered the game$'
+            matches = re.findall(pattern, lookback_line)
+
+            if len(matches) > 0:
+                if matches[0] == player_name:
+                    logger.debug("Found match in enter line:")
                     logger.debug(lookback_line)
 
                     return lookback_line
 
-    def get_timestamp_diff(self, enter, timeout):
+    def get_timestamp_diff(self, given_enter, given_timeout):
         """
         Return difference between two given timestamps, in minutes
         """
 
-        enter = self.get_datetime_for_timestamp(enter)
-        timeout = self.get_datetime_for_timestamp(timeout)
+        enter = self.get_datetime_for_timestamp(given_enter)
+        timeout = self.get_datetime_for_timestamp(given_timeout)
 
         diff = timeout - enter
 
@@ -103,22 +102,34 @@ class TimeoutFinder():
 
         3. Check if the diff between the two events is ~7m
         """
-        self.timeouts[filename] = []
+        self.timeouts[filename] = {
+            "timeouts": [],
+            "enters": []
+        }
 
         loglines = []
 
+        logger.info("Opening '{}' for read".format(filename))
         with io.open(filename, "r", encoding="ISO-8859-1") as log:
-            loglines = log.readlines()
+            loglines = log.read()
 
-        for i, line in enumerate(loglines):
+        timeouts_pattern = re.compile('^(.+\" disconnected \(reason \".+\ timed out\"\)$)', re.M)
+        timeouts = re.findall(timeouts_pattern, loglines)
+
+        enters_pattern = re.compile('^(.+\" entered the game$)', re.M)
+        enters = re.findall(enters_pattern, loglines)
+        self.timeouts[filename]["enters"] = enters
+
+        events = timeouts + enters
+        events = sorted(events)
+
+        for i, line in enumerate(events):
             if ' timed out")' in line:
-                logger.debug("Found timeout")
-
                 player_name = self.get_player_name_from_line(line)
                 timeout_timestamp = self.get_timestamp_from_line(line)
 
                 # Only search through logs up to this point in the file
-                enter_line = self.find_enter_for_timeout(player_name, loglines[:i])
+                enter_line = self.find_enter_for_timeout(player_name, events[:i])
 
                 if not enter_line:
                     logger.warning("Couldn't find an associated connection for timeout: '{}'".format(line))
@@ -130,7 +141,7 @@ class TimeoutFinder():
 
                 if event_diff < self.timeout_threshold:
                     logger.info("Found a short-playtime timeout event ({}): {}".format(event_diff, line))
-                    self.timeouts[filename].append(line)
+                    self.timeouts[filename]["timeouts"].append(line)
 
     def find_timeouts_for_chunk(self, chunk, chunk_number):
         for filename in chunk:
@@ -157,7 +168,7 @@ class TimeoutFinder():
         return chunks_by_day
 
     def combine_day_chunks(self, day_chunks):
-        for day, files in day_chunks.iteritems():
+        for day, files in day_chunks.items():
             sorted_files = sorted(files)
             sorted_files = " ".join(sorted_files)
 
@@ -166,7 +177,6 @@ class TimeoutFinder():
             command = "cat {} >> {}".format(sorted_files, output_file)
 
             # We have to do shell here because there's no way to redirect output with subprocess normally
-            logger.info("Running '{}'".format(command))
             subprocess.check_output(command, shell=True)
 
     def get_existing_logs(self):
@@ -181,21 +191,24 @@ class TimeoutFinder():
         self.combine_day_chunks(existing_log_chunks)
 
     def get_combined_logs(self):
-        self.create_combined_logs()
+        #self.create_combined_logs()
 
         glob_pattern = "{}/*.log".format(self.tmp_dir)
         filenames = glob.glob(glob_pattern)
 
-        return filenames
+        return sorted(filenames)
 
     def find_timeouts(self):
         strings = []
 
         filenames = self.get_combined_logs()
-        logger.info(filenames)
-        return
 
-        for chunk_number, chunk in enumerate(self.split_work_into_chunks(filenames, 15)):
+        number_of_chunks = 2.0
+
+        chunk_size = round(len(filenames) / number_of_chunks)
+
+        for chunk_number, chunk in enumerate(self.split_work_into_chunks_of_size(filenames, chunk_size)):
+            logger.info("Starting thread {}".format(chunk_number))
             string = threading.Thread(target=self.find_timeouts_for_chunk, args=(chunk,chunk_number,))
             strings.append(string)
 
@@ -205,15 +218,33 @@ class TimeoutFinder():
         for string in strings:
             string.join()
 
+        #for filename in filenames:
+        #    self.find_timeouts_for_file(filename)
+
         sorted_filenames = sorted(self.timeouts.keys())
+
         for filename in sorted_filenames:
-            data = self.timeouts[filename]
-            logger.info("{}: {}".format(filename, len(data)))
+            timeouts = self.timeouts[filename]["timeouts"]
+            total_timeouts = len(timeouts)
+
+            enters = self.timeouts[filename]["enters"]
+            total_enters = len(enters)
+
+            if total_enters == 0:
+                logger.warning("Total enters was 0 for {}".format(filename))
+                logger.warning(self.timeouts[filename])
+
+                continue
+
+            percent_timeouts = (float(total_timeouts) / float(total_enters)) * 100
+            percent_timeouts = round(percent_timeouts, 2)
+
+            logger.info("{}: {}/{} ({}%)".format(filename, total_timeouts, total_enters, percent_timeouts))
 
         for filename in filenames:
             logger.debug("Removing {}".format(filename))
-            os.remove(filename)
+            #os.remove(filename)
 
 if __name__ == "__main__":
     # Get log dir as param
-    TimeoutFinder("/home/steam/Code/servers/garrysmod/log/console").chunk_by_day()
+    TimeoutFinder("/home/steam/Code/servers/garrysmod/log/console", "/media/storage/steam/log/tmp").find_timeouts()
